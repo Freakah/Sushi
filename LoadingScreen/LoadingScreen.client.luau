@@ -463,7 +463,7 @@ connection = RunService.RenderStepped:Connect(function(dt)
 	stripeGradient.Offset = Vector2.new(((elapsed * 0.25) % (2 / STRIPES)) - 2 / STRIPES, 0)
 	percent.Text = ("%d%%"):format(math.floor(progress * 100))
 
-	if now >= nextMessage then
+	if now >= nextMessage and not playReady then
 		nextMessage = now + 1.2
 		messageIndex = messageIndex % #CONFIG.Messages + 1
 		status.Text = CONFIG.Messages[messageIndex]
@@ -475,6 +475,8 @@ connection = RunService.RenderStepped:Connect(function(dt)
 	if progress >= 1 and not playReady then
 		playReady = true
 		status.Text = "Your sushi is ready! 🍣"
+		-- Move the message below the Play button so it isn't covered
+		tween(status, 0.4, { Position = UDim2.fromScale(0.5, 0.875) }, Enum.EasingStyle.Back)
 		tween(bar, 0.3, { BackgroundTransparency = 1 })
 		for _, child in bar:GetDescendants() do
 			if child:IsA("GuiObject") then
