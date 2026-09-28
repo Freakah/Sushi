@@ -14,7 +14,7 @@
 ]]
 
 local CONFIG = {
-	Title = nil, -- nil = use your game's name; or e.g. "Sushi Tycoon"
+	Title = "Sushi Incremental", -- set to nil to use the name of the published game instead
 	Subtitle = "🌸 Welcome to the sushi bar! 🌸",
 	MinimumTime = 3, -- seconds the loading screen shows at least
 	ShowInStudio = true, -- set false to skip it while testing in Studio
