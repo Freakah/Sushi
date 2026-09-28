@@ -1,14 +1,13 @@
 --[[
-	Sakura Tree Generator (High Quality)
-	====================================
-	Builds a detailed cherry blossom (sakura) tree out of regular Parts:
-	  - a thick, slightly leaning trunk with flared roots
-	  - curved branches that taper smoothly and spread into a wide umbrella
-	  - layered blossom clusters: deep pink shaded inside, pale sunlit pink
-	    on the top and outer edge
-	  - hanging blossom strands
-	  - falling petals that drift in the wind
-	  - a carpet of fallen petals that follows the ground/terrain
+	Sakura Tree Generator
+	=====================
+	Builds a realistic-style cherry blossom (sakura) tree out of regular Parts:
+	  - a knobbly grey-brown trunk with flared roots that forks into big limbs
+	  - curved, tapering branches spreading into a wide, uneven canopy
+	  - blossom clumps made of many small flat petal pieces at random angles
+	    (not balls), pale pink where the sun hits and deeper pink underneath
+	  - thin dark twigs poking out through the blossoms
+	  - falling petals that drift in the wind, and fallen petals on the ground
 
 	HOW TO USE:
 	  1. In Roblox Studio, point the camera at the spot where you want the tree.
@@ -29,7 +28,7 @@ local CONFIG = {
 	Scale = 1, -- 1.5 = 50% bigger tree, 0.7 = smaller tree
 
 	TrunkHeight = 7,
-	TrunkRadius = 1.7,
+	TrunkRadius = 1.6,
 	MainLimbs = { 3, 4 },
 	LimbLength = 9,
 	LengthDecay = 0.72, -- each level of branches is this much shorter
@@ -37,17 +36,20 @@ local CONFIG = {
 	Spread = 0.45, -- how strongly branches reach outward (wide umbrella shape)
 	SegmentLength = 2.2, -- shorter = smoother curves, more parts
 
+	PetalSize = { 1.1, 2.2 }, -- size of each flat petal piece in the canopy
+	PetalThickness = 0.1,
+	ShadowFill = true, -- small deep-pink shapes inside each clump so it looks full, not see-through
 	BlossomMaterial = Enum.Material.SmoothPlastic,
+
 	FallingPetals = true,
 	-- Swap for a petal image from the Toolbox (e.g. "rbxassetid://123456") if you like
 	PetalTexture = "rbxasset://textures/particles/smoke_main.dds",
-	PetalCarpet = true, -- soft pink patches on the ground under the tree
 }
 
 local PRESETS = {
-	High = { Levels = 5, InnerPerTip = 2, BlossomsPerTip = 7, SideBranchChance = 0.5, HangingChance = 0.3, GroundPetals = 140, PetalRate = 12 },
-	Medium = { Levels = 4, InnerPerTip = 2, BlossomsPerTip = 6, SideBranchChance = 0.35, HangingChance = 0.2, GroundPetals = 80, PetalRate = 8 },
-	Low = { Levels = 4, InnerPerTip = 1, BlossomsPerTip = 4, SideBranchChance = 0.15, HangingChance = 0.1, GroundPetals = 30, PetalRate = 5 },
+	High = { Levels = 5, PetalsPerTip = 15, SideBranchChance = 0.5, TwigChance = 0.6, GroundPetals = 140, PetalRate = 14 },
+	Medium = { Levels = 4, PetalsPerTip = 12, SideBranchChance = 0.35, TwigChance = 0.45, GroundPetals = 80, PetalRate = 9 },
+	Low = { Levels = 4, PetalsPerTip = 7, SideBranchChance = 0.15, TwigChance = 0.3, GroundPetals = 30, PetalRate = 5 },
 }
 
 local P = PRESETS[QUALITY] or PRESETS.High
@@ -55,17 +57,18 @@ local S = CONFIG.Scale
 local TAU = math.pi * 2
 local MIN_RADIUS = 0.15 * S
 
-local BARK_BASE = Color3.fromRGB(58, 40, 37)
-local BARK_TIP = Color3.fromRGB(112, 66, 58) -- young sakura twigs are reddish
-local BARK_ALT = Color3.fromRGB(84, 62, 54)
+-- Grey-brown trunk, darker thin branches
+local BARK_BASE = Color3.fromRGB(104, 84, 74)
+local BARK_TIP = Color3.fromRGB(52, 36, 34)
+local BARK_ALT = Color3.fromRGB(82, 66, 60)
 
--- From deep shaded pink (inside the canopy) to almost white (sunlit top)
+-- From deep shaded pink (underneath) to almost white (sunlit top)
 local BLOSSOM_GRADIENT = {
-	Color3.fromRGB(222, 104, 146),
-	Color3.fromRGB(242, 146, 178),
-	Color3.fromRGB(255, 180, 203),
-	Color3.fromRGB(255, 208, 223),
-	Color3.fromRGB(255, 234, 241),
+	Color3.fromRGB(206, 86, 132),
+	Color3.fromRGB(236, 128, 168),
+	Color3.fromRGB(252, 164, 196),
+	Color3.fromRGB(255, 196, 218),
+	Color3.fromRGB(255, 226, 237),
 }
 
 local RunService = game:GetService("RunService")
@@ -115,12 +118,8 @@ blossoms.Parent = tree
 local boundsMin = Vector3.new(math.huge, math.huge, math.huge)
 local boundsMax = -boundsMin
 
-local function newPart(name, shape, size, cframe, color, material, parent)
-	local part = Instance.new("Part")
+local function style(part, name, color, material, parent)
 	part.Name = name
-	part.Shape = shape
-	part.Size = size
-	part.CFrame = cframe
 	part.Color = color
 	part.Material = material
 	part.Anchored = true
@@ -128,6 +127,14 @@ local function newPart(name, shape, size, cframe, color, material, parent)
 	part.BottomSurface = Enum.SurfaceType.Smooth
 	part.Parent = parent
 	return part
+end
+
+local function newPart(name, shape, size, cframe, color, material, parent)
+	local part = Instance.new("Part")
+	part.Shape = shape
+	part.Size = size
+	part.CFrame = cframe
+	return style(part, name, color, material, parent)
 end
 
 -- Decorative parts: nothing can bump into, touch or click them
@@ -146,6 +153,10 @@ local function randomInSphere()
 	end
 end
 
+local function randomRotation()
+	return CFrame.Angles(rng:NextNumber(0, TAU), rng:NextNumber(0, TAU), rng:NextNumber(0, TAU))
+end
+
 local function gradient(t)
 	local stops = #BLOSSOM_GRADIENT
 	t = math.clamp(t, 0, 1) * (stops - 1)
@@ -158,7 +169,7 @@ end
 
 local function barkColor(level)
 	local base = BARK_BASE:Lerp(BARK_TIP, math.clamp(level / P.Levels, 0, 1))
-	return base:Lerp(BARK_ALT, rng:NextNumber(0, 0.3))
+	return base:Lerp(BARK_ALT, rng:NextNumber(0, 0.25))
 end
 
 -- A vector at `angle` radians away from `dir`, rotated `phase` radians around it
@@ -235,6 +246,10 @@ local function limb(start, dir, length, r0, r1, bend, upCurve, level)
 		if radius > 0.25 * S or step == 1 then
 			joint(position, radius, color, collide)
 		end
+		-- Knobbly bumps on the trunk and big limbs
+		if level <= 1 and rng:NextNumber() < 0.35 then
+			joint(position + randomInSphere() * radius * 0.5, radius * rng:NextNumber(0.55, 0.8), color, collide)
+		end
 		cylinder(position, nextPosition, radius, color, collide)
 		position = nextPosition
 		table.insert(points, { position, radius })
@@ -254,7 +269,7 @@ local function branch(start, dir, level, r0)
 	local tip = points[#points][1]
 
 	if level >= P.Levels then
-		table.insert(tips, { Position = tip, Fill = false })
+		table.insert(tips, { Position = tip, Direction = endDir, Fill = false })
 		return
 	end
 
@@ -278,15 +293,15 @@ local function branch(start, dir, level, r0)
 
 	-- Extra blossoms near the outer branches fill out the canopy
 	if level >= P.Levels - 1 then
-		table.insert(tips, { Position = tip, Fill = true })
+		table.insert(tips, { Position = tip, Direction = endDir, Fill = true })
 	end
 end
 
 local R = CONFIG.TrunkRadius * S
 
--- Trunk with a slight lean
+-- Trunk with a slight lean and some twist
 local leanDir = (Vector3.yAxis + Vector3.new(rng:NextNumber(-0.12, 0.12), 0, rng:NextNumber(-0.12, 0.12))).Unit
-local trunkPoints = limb(origin, leanDir, CONFIG.TrunkHeight * S, R, R * 0.8, 0.1, 0, 0)
+local trunkPoints = limb(origin, leanDir, CONFIG.TrunkHeight * S, R, R * 0.8, 0.16, 0, 0)
 local trunkTop = trunkPoints[#trunkPoints][1]
 
 -- Main limbs fan out evenly from the top of the trunk
@@ -294,22 +309,22 @@ local limbCount = rng:NextInteger(CONFIG.MainLimbs[1], CONFIG.MainLimbs[2])
 local limbYaw = rng:NextNumber(0, TAU)
 for i = 1, limbCount do
 	local yaw = limbYaw + (i - 1) * TAU / limbCount + rng:NextNumber(-0.25, 0.25)
-	local tilt = rng:NextNumber(0.55, 0.85)
+	local tilt = rng:NextNumber(0.5, 0.85)
 	local dir = (CFrame.Angles(0, yaw, 0) * CFrame.Angles(tilt, 0, 0)).UpVector
 	branch(trunkTop, dir, 1, R * rng:NextNumber(0.6, 0.72))
 end
 
 -- Flared roots at the base
-joint(origin + Vector3.new(0, R * 0.2, 0), R * 1.15, BARK_BASE, true)
+joint(origin + Vector3.new(0, R * 0.2, 0), R * 1.1, BARK_BASE, true)
 local rootCount = 5
 for i = 1, rootCount do
 	local yaw = (i - 1) * TAU / rootCount + rng:NextNumber(-0.3, 0.3)
 	local outward = Vector3.new(math.cos(yaw), 0, math.sin(yaw))
-	limb(origin + Vector3.new(0, R * 0.9, 0), (outward + Vector3.new(0, -0.55, 0)).Unit, R * 2.8, R * 0.55, R * 0.2, 0.15, 0, 0)
+	limb(origin + Vector3.new(0, R * 0.9, 0), (outward + Vector3.new(0, -0.55, 0)).Unit, R * 2.6, R * 0.5, R * 0.2, 0.15, 0, 0)
 end
 
 --------------------------------------------------------------------------
--- Blossoms
+-- Blossoms: clumps of flat petal pieces
 --------------------------------------------------------------------------
 
 local minY, maxY, maxDistance = math.huge, -math.huge, 1
@@ -319,45 +334,84 @@ for _, tip in tips do
 	maxY = math.max(maxY, p.Y)
 	maxDistance = math.max(maxDistance, Vector3.new(p.X - origin.X, 0, p.Z - origin.Z).Magnitude)
 end
+minY -= 2 * S
+maxY += 3 * S
 local heightRange = math.max(maxY - minY, 1)
 
-local function addBlossom(position, size, color, castShadow)
-	local blossom = newPart("Blossom", Enum.PartType.Ball, Vector3.new(size, size, size), CFrame.new(position), color, CONFIG.BlossomMaterial, blossoms)
-	makeDecorative(blossom)
-	blossom.CastShadow = castShadow
-
-	local half = Vector3.new(size, size, size) / 2
-	boundsMin = boundsMin:Min(position - half)
-	boundsMax = boundsMax:Max(position + half)
+-- Higher and further out = more sunlight = paler pink
+local function sunlight(position)
+	local flat = Vector3.new(position.X - origin.X, 0, position.Z - origin.Z)
+	return 0.6 * ((position.Y - minY) / heightRange) + 0.4 * math.min(flat.Magnitude / maxDistance, 1)
 end
+
+local function growBounds(position, radius)
+	local r = Vector3.new(radius, radius, radius)
+	boundsMin = boundsMin:Min(position - r)
+	boundsMax = boundsMax:Max(position + r)
+end
+
+-- One flat petal piece: a thin square-ish card or a thin triangular shard
+local function addPetal(position, tone)
+	local width = rng:NextNumber(CONFIG.PetalSize[1], CONFIG.PetalSize[2]) * S
+	local height = width * rng:NextNumber(0.6, 1)
+	local thickness = CONFIG.PetalThickness * S
+	local petal
+	if rng:NextNumber() < 0.5 then
+		petal = Instance.new("WedgePart")
+		petal.Size = Vector3.new(thickness, height, width)
+	else
+		petal = Instance.new("Part")
+		petal.Size = Vector3.new(width, thickness, height)
+	end
+	petal.CFrame = CFrame.new(position) * randomRotation()
+	style(petal, "Petal", gradient(tone), CONFIG.BlossomMaterial, blossoms)
+	makeDecorative(petal)
+	growBounds(position, width)
+end
+
+local function addShadowFill(position, size, tone)
+	local fill = newPart("ShadowFill", Enum.PartType.Block, Vector3.new(size, size * 0.7, size), CFrame.new(position) * randomRotation(), gradient(tone), CONFIG.BlossomMaterial, blossoms)
+	makeDecorative(fill)
+end
+
+local clumpRadius = Vector3.new(1.9, 1.3, 1.9) * S
 
 for _, tip in tips do
 	local p = tip.Position
 	local flat = Vector3.new(p.X - origin.X, 0, p.Z - origin.Z)
 	local outward = if flat.Magnitude > 0.01 then flat.Unit else Vector3.zero
-	-- Higher and further out = more sunlight = paler pink
-	local tone = 0.55 * ((p.Y - minY) / heightRange) + 0.45 * (flat.Magnitude / maxDistance)
-	local amount = if tip.Fill then 0.5 else 1
+	local petalCount = math.max(3, math.round(P.PetalsPerTip * (if tip.Fill then 0.45 else 1)))
 
-	-- Big, darker balls inside give the canopy its volume
-	for _ = 1, math.max(1, math.round(P.InnerPerTip * amount)) do
-		addBlossom(p + randomInSphere() * 1.2 * S, rng:NextNumber(3.2, 4.6) * S, gradient(tone - 0.35 + rng:NextNumber(-0.1, 0.1)), true)
+	-- Split each tip's blossoms into a few uneven clumps
+	local clumps = if tip.Fill then 1 else rng:NextInteger(2, 3)
+	for c = 1, clumps do
+		local center = p + (randomInSphere() * Vector3.new(1.6, 0.7, 1.6) + outward * 0.7 + Vector3.yAxis * 0.5) * S
+		local base = sunlight(center)
+
+		if CONFIG.ShadowFill then
+			addShadowFill(center, rng:NextNumber(1.4, 2) * S, base - 0.45)
+		end
+
+		for _ = 1, math.ceil(petalCount / clumps) do
+			local offset = randomInSphere() * clumpRadius
+			-- Top of each clump catches the light, underside is in shade
+			local tone = base + (offset.Y / clumpRadius.Y) * 0.2 + rng:NextNumber(-0.12, 0.12)
+			addPetal(center + offset, tone)
+		end
 	end
 
-	-- Smaller, lighter balls on the outside give it a fluffy, flowery surface
-	for _ = 1, math.max(1, math.round(P.BlossomsPerTip * amount)) do
-		local offset = randomInSphere() * 2.6 * S + (outward * 0.6 + Vector3.yAxis * 0.8) * S
-		addBlossom(p + offset, rng:NextNumber(1.6, 3) * S, gradient(tone + rng:NextNumber(-0.15, 0.2)), true)
-	end
-
-	-- Hanging strands of blossoms
-	if not tip.Fill and rng:NextNumber() < P.HangingChance then
-		local position = p + randomInSphere() * 1.5 * S + outward * 1.5 * S
-		local size = rng:NextNumber(1.3, 1.7) * S
-		for _ = 1, rng:NextInteger(3, 6) do
-			position += Vector3.new(rng:NextNumber(-0.25, 0.25) * S, -size * 0.75, rng:NextNumber(-0.25, 0.25) * S)
-			addBlossom(position, size, gradient(tone + 0.1 + rng:NextNumber(-0.1, 0.1)), false)
-			size *= 0.88
+	-- Thin bare twigs poking out through the blossoms
+	if not tip.Fill and rng:NextNumber() < P.TwigChance then
+		for _ = 1, rng:NextInteger(1, 2) do
+			local dir = spreadOutward(deviate(tip.Direction, rng:NextNumber(0.2, 0.8), perpendicularTo(tip.Direction), 0), 0.2)
+			local twigEnd = p + dir * rng:NextNumber(2.5, 4) * S
+			cylinder(p, twigEnd, 0.08 * S, BARK_TIP, false)
+			-- Sometimes a few petals at the end of the twig
+			if rng:NextNumber() < 0.4 then
+				for _ = 1, 3 do
+					addPetal(twigEnd + randomInSphere() * 0.6 * S, sunlight(twigEnd) + rng:NextNumber(-0.1, 0.1))
+				end
+			end
 		end
 	end
 end
@@ -425,27 +479,6 @@ end
 local ground = Instance.new("Model")
 ground.Name = "GroundPetals"
 ground.Parent = tree
-
-if CONFIG.PetalCarpet then
-	for i = 1, 3 do
-		local angle = rng:NextNumber(0, TAU)
-		local distance = rng:NextNumber(0, canopyRadius * 0.3)
-		local center = groundAt(origin.X + math.cos(angle) * distance, origin.Z + math.sin(angle) * distance)
-		local diameter = canopyRadius * rng:NextNumber(0.9, 1.5)
-		local carpet = newPart(
-			"PetalCarpet",
-			Enum.PartType.Cylinder,
-			Vector3.new(0.05, diameter, diameter),
-			CFrame.new(center + Vector3.new(0, 0.03 + i * 0.015, 0)) * CFrame.Angles(0, 0, math.pi / 2),
-			gradient(0.6 + i * 0.1),
-			Enum.Material.SmoothPlastic,
-			ground
-		)
-		carpet.Transparency = 0.45 + i * 0.1
-		carpet.CastShadow = false
-		makeDecorative(carpet)
-	end
-end
 
 for _ = 1, P.GroundPetals do
 	local angle = rng:NextNumber(0, TAU)
