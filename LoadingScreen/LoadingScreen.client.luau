@@ -54,7 +54,10 @@ local StarterGui = game:GetService("StarterGui")
 local MarketplaceService = game:GetService("MarketplaceService")
 local SoundService = game:GetService("SoundService")
 
+print("[LoadingScreen] Script started")
+
 if RunService:IsStudio() and not CONFIG.ShowInStudio then
+	print("[LoadingScreen] Skipped because ShowInStudio is false")
 	return
 end
 
@@ -178,6 +181,7 @@ local rootScale = create("UIScale", { Parent = root })
 
 setCoreGui(false)
 setControls(false)
+print("[LoadingScreen] Showing loading screen")
 
 -- Scrolling sushi pattern
 local SPACING = 150
